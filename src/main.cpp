@@ -477,6 +477,7 @@ void setup()
     // STEP 2: Launch Dual Broadcast Fallback
     Serial.println("\n[Setup] No connection established. Launching Dual Broadcast...");
 
+    WiFi.disconnect(); // Abort any lingering background connection attempts to free the radio for scanning
     WiFi.mode(WIFI_AP_STA);
     WiFi.softAP(AP_SSID);
 
