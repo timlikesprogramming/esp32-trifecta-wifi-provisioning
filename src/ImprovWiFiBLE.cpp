@@ -31,6 +31,9 @@ void ImprovWiFiBLE::setDeviceInfo(ImprovTypes::ChipFamily chipFamily,
   // Initialize BLE and set up the Improv service
   NimBLEDevice::init(device_name_.c_str());
   NimBLEDevice::setPower(ESP_PWR_LVL_P9);
+  
+  // Set MTU to support larger payloads (like long SSIDs) without truncation
+  NimBLEDevice::setMTU(256);
 
   // Prefer a robust address type on ESP32
   NimBLEDevice::setOwnAddrType(BLE_OWN_ADDR_RPA_RANDOM_DEFAULT);
@@ -145,6 +148,7 @@ void ImprovWiFiBLE::handleRpc(const uint8_t *data, size_t len) {
   const uint8_t declared_len = data[1];
 
   if (declared_len + 3 != len) {
+    Serial.printf("\n[Improv BLE Error] Bad packet length! Expected %d, got %d\n", declared_len + 3, (int)len);
     updateError(ERR_BAD_PACKET);
     if (onImprovErrorCallback_)
       onImprovErrorCallback_(ImprovTypes::Error::ERROR_INVALID_RPC);
@@ -153,6 +157,7 @@ void ImprovWiFiBLE::handleRpc(const uint8_t *data, size_t len) {
 
   const uint8_t cs = data[len - 1];
   if (checksumLSB(data, len - 1) != cs) {
+    Serial.printf("\n[Improv BLE Error] Checksum error! Expected 0x%02X, got 0x%02X\n", checksumLSB(data, len - 1), cs);
     updateError(ERR_BAD_PACKET);
     if (onImprovErrorCallback_)
       onImprovErrorCallback_(ImprovTypes::Error::ERROR_INVALID_RPC);
@@ -161,16 +166,20 @@ void ImprovWiFiBLE::handleRpc(const uint8_t *data, size_t len) {
 
   switch (cmd) {
   case 0x01: // Send Wi-Fi
+    Serial.println("\n[Improv BLE] Received Wi-Fi credentials command (0x01)");
     rpcSendWifi(&data[2], declared_len);
     break;
   case 0x02: // Identify
+    Serial.println("\n[Improv BLE] Received Identify command (0x02)");
     rpcIdentify();
     break;
   case 0x03: // Scan Wi-Fi (client RPC variant)
   case 0x04: // Scan Wi-Fi (official Improv BLE COMMAND_SCAN)
+    Serial.printf("\n[Improv BLE] Received Wi-Fi scan command (0x%02X)\n", cmd);
     rpcScanWifi();
     break;
   default:
+    Serial.printf("\n[Improv BLE Error] Unknown command byte: 0x%02X\n", cmd);
     updateError(ERR_UNKNOWN_CMD);
     if (onImprovErrorCallback_)
       onImprovErrorCallback_(ImprovTypes::Error::ERROR_INVALID_RPC);
@@ -178,8 +187,36 @@ void ImprovWiFiBLE::handleRpc(const uint8_t *data, size_t len) {
   }
 }
 
+static bool is_scanning = false;
+
 void ImprovWiFiBLE::rpcScanWifi() {
-  int n = WiFi.scanNetworks(false, true);
+  Serial.println("[Improv BLE] Spawning background task for Wi-Fi scan...");
+  xTaskCreate([](void *pvParameters) {
+    ImprovWiFiBLE *self = (ImprovWiFiBLE *)pvParameters;
+    self->performScan();
+    vTaskDelete(NULL);
+  }, "wifi_scan", 4096, this, 1, NULL);
+}
+
+void ImprovWiFiBLE::performScan() {
+  if (is_scanning) {
+    Serial.println("[Improv BLE] Scan already in progress, ignoring duplicate request.");
+    return;
+  }
+  is_scanning = true;
+
+  Serial.println("[Improv BLE] Initiating 2.4GHz Wi-Fi scan...");
+  
+  // Retry mechanism for -2 (WIFI_SCAN_FAILED), which happens if the radio is busy
+  int n = -2;
+  for (int attempts = 0; attempts < 3; attempts++) {
+    n = WiFi.scanNetworks(false, true);
+    if (n >= 0) break;
+    Serial.printf("[Improv BLE] Scan failed with %d, retrying...\n", n);
+    delay(500);
+  }
+  
+  Serial.printf("[Improv BLE] Wi-Fi scan complete. Found %d networks.\n", n);
 
   if (n > 0) {
     std::vector<String> seenSSIDs;
@@ -200,8 +237,11 @@ void ImprovWiFiBLE::rpcScanWifi() {
         String rssiStr = String(WiFi.RSSI(i));
         String authStr = (WiFi.encryptionType(i) == WIFI_AUTH_OPEN) ? "NO" : "YES";
 
+        Serial.printf("[Improv BLE] Streaming network -> SSID: %s | RSSI: %s | Auth: %s\n", ssid.c_str(), rssiStr.c_str(), authStr.c_str());
+
         std::vector<uint8_t> buf;
-        uint8_t payload_len = (1 + ssid.length()) + (1 + rssiStr.length()) + (1 + authStr.length());
+        // payload: ssid_len (1) + ssid + rssi (1) + auth (1)
+        uint8_t payload_len = 1 + ssid.length() + 1 + 1;
         buf.reserve(3 + payload_len);
 
         buf.push_back(0x04);
@@ -210,27 +250,26 @@ void ImprovWiFiBLE::rpcScanWifi() {
         buf.push_back((uint8_t)ssid.length());
         buf.insert(buf.end(), ssid.begin(), ssid.end());
 
-        buf.push_back((uint8_t)rssiStr.length());
-        buf.insert(buf.end(), rssiStr.begin(), rssiStr.end());
-
-        buf.push_back((uint8_t)authStr.length());
-        buf.insert(buf.end(), authStr.begin(), authStr.end());
-
+        buf.push_back((uint8_t)(WiFi.RSSI(i)));
+        buf.push_back((uint8_t)(WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? 0 : 1));
         buf.push_back(checksumLSB(buf.data(), buf.size()));
 
         ch_rpc_res_->setValue((uint8_t *)buf.data(), buf.size());
         ch_rpc_res_->notify();
-        delay(10);
+        delay(50); 
       }
     }
   }
 
   WiFi.scanDelete();
 
+  Serial.println("[Improv BLE] Sending scan completion signal (0x04, 0x00)");
   std::vector<uint8_t> endBuf = {0x04, 0x00};
   endBuf.push_back(checksumLSB(endBuf.data(), endBuf.size()));
   ch_rpc_res_->setValue((uint8_t *)endBuf.data(), endBuf.size());
   ch_rpc_res_->notify();
+  
+  is_scanning = false;
 }
 
 void ImprovWiFiBLE::rpcSendWifi(const uint8_t *p, size_t n) {
@@ -313,11 +352,15 @@ void ImprovWiFiBLE::rpcIdentify() {
 }
 
 void ImprovWiFiBLE::sendDeviceUrl() {
+  std::string url = device_url_.c_str();
+  if (url.empty() && WiFi.status() == WL_CONNECTED) {
+    url = std::string("http://") + WiFi.localIP().toString().c_str();
+  }
+
   std::vector<uint8_t> buf;
-  buf.reserve(4 + device_url_.length());
+  buf.reserve(4 + url.length());
   buf.push_back(0x01);
 
-  const std::string url = device_url_.c_str();
   const uint8_t url_len = static_cast<uint8_t>(url.size());
   const uint8_t payload_len = 1 + url_len;
   buf.push_back(payload_len);
@@ -357,13 +400,13 @@ NimBLEAdvertisementData ImprovWiFiBLE::buildAdvData(uint8_t state,
   NimBLEAdvertisementData ad;
 
   ad.setFlags(0x06);
-  ad.addServiceUUID(NimBLEUUID(SVC_UUID));
+  // Use 16-bit Improv Service UUID (0x4677) in primary ADV so payload is 19 bytes (well under 31B limit)
+  ad.addServiceUUID(NimBLEUUID((uint16_t)SERVICE_DATA_UUID_16));
 
   uint8_t payload[8] = {0x77, 0x46, state, caps, 0x00, 0x00, 0x00, 0x00};
   ad.setServiceData(NimBLEUUID((uint16_t)SERVICE_DATA_UUID_16), payload,
                     sizeof(payload));
 
-  // Device name is transmitted in Scan Response data to stay under the 31-byte limit
   return ad;
 }
 

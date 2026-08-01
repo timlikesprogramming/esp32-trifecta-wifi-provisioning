@@ -127,6 +127,9 @@ private:
   void rpcIdentify();
   void rpcScanWifi();
 
+  // background scan task
+  void performScan();
+
   // send response with device URL (mirrors serial transport semantics)
   void sendDeviceUrl();
 
