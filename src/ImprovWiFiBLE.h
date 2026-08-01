@@ -69,7 +69,7 @@ public:
   bool isConnected();
 
   // NimBLEServerCallbacks
-  void onDisconnect(NimBLEServer *s);
+  void onDisconnect(NimBLEServer *server, NimBLEConnInfo& connInfo, int reason) override;
 
   // NimBLECharacteristicCallbacks
   void onWrite(NimBLECharacteristic *c, NimBLEConnInfo &info) override;

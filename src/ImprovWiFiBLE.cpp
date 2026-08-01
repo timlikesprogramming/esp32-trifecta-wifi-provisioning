@@ -121,11 +121,12 @@ bool ImprovWiFiBLE::isConnected() { return WiFi.status() == WL_CONNECTED; }
 
 // ==== NimBLE callbacks ====
 
-void ImprovWiFiBLE::onDisconnect(NimBLEServer *) {
+void ImprovWiFiBLE::onDisconnect(NimBLEServer *server, NimBLEConnInfo& connInfo, int reason) {
   if (adv_) {
     advertiseNow();
-    adv_->start();
   }
+  // The safest way to restart advertising in NimBLE after a disconnect
+  NimBLEDevice::startAdvertising();
 }
 
 void ImprovWiFiBLE::onWrite(NimBLECharacteristic *c, NimBLEConnInfo &) {
