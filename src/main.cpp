@@ -155,8 +155,15 @@ const char success_html[] PROGMEM = R"rawliteral(
 )rawliteral";
 
 // --- WEB SERVER ROUTES ---
+extern const char dashboard_html[];
+
 void handlePortalRoot()
 {
+    if (currentState == STATE_CONNECTED) {
+        webServer.send_P(200, "text/html", dashboard_html);
+        return;
+    }
+
     Serial.println("\n[Captive Portal] Client requested portal. Scanning Wi-Fi networks...");
     int n = WiFi.scanNetworks(false, true);
 
@@ -344,8 +351,14 @@ void startConnectedDashboard()
     dnsServer.stop();
     WiFi.softAPdisconnect(true);
 
-    webServer.on("/", HTTP_GET, []() {
+    webServer.on("/", HTTP_ANY, []() {
         webServer.send_P(200, "text/html", dashboard_html);
+    });
+
+    webServer.onNotFound([]() {
+        String message = "Not found: " + webServer.uri() + "\nMethod: " + String(webServer.method());
+        Serial.println("[WebServer] 404 - " + message);
+        webServer.send(404, "text/plain", message);
     });
 
     webServer.on("/api/status", HTTP_GET, []() {
