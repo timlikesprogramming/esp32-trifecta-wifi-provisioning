@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyProduct Web Setup</title>
+    <style>
+        :root {
+            --improv-primary-color: #2563eb;
+            --improv-on-primary-color: #ffffff;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            min-height: 100vh; 
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #f8fafc;
+            margin: 0; 
+            padding: 1.5rem;
+        }
+
+        .card { 
+            background: #ffffff; 
+            color: #0f172a;
+            padding: 2.5rem 2rem; 
+            border-radius: 20px; 
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35); 
+            text-align: center; 
+            max-width: 440px;
+            width: 100%;
+        }
+
+        .logo-icon {
+            width: 56px;
+            height: 56px;
+            background: rgba(37, 99, 235, 0.1);
+            color: #2563eb;
+            border-radius: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1.25rem;
+        }
+
+        .logo-icon svg {
+            width: 32px;
+            height: 32px;
+        }
+
+        h2 { 
+            margin: 0 0 0.5rem 0; 
+            color: #0f172a; 
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: -0.025em;
+        }
+
+        p.subtitle { 
+            color: #64748b; 
+            margin: 0 0 2rem 0; 
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        improv-wifi-launch-button {
+            display: block;
+            margin-top: 1rem;
+        }
+
+        .btn-custom {
+            background-color: #2563eb;
+            color: #ffffff;
+            border: none;
+            padding: 0.875rem 1.75rem;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3);
+            width: 100%;
+        }
+
+        .btn-custom:hover {
+            background-color: #1d4ed8;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 12px -2px rgba(37, 99, 235, 0.4);
+        }
+
+        .fallback-notice {
+            background: #fffbe6;
+            border: 1px solid #ffe58f;
+            border-radius: 12px;
+            padding: 1.25rem;
+            text-align: left;
+            margin-top: 1rem;
+        }
+
+        .notice-badge {
+            display: inline-block;
+            background: #faad14;
+            color: #ffffff;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 0.2rem 0.5rem;
+            border-radius: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.75rem;
+        }
+
+        .fallback-notice p {
+            margin: 0 0 0.5rem 0;
+            color: #434343;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+
+        .fallback-notice ol {
+            margin: 0.5rem 0 0 0;
+            padding-left: 1.25rem;
+            color: #1f1f1f;
+            font-size: 0.875rem;
+            line-height: 1.5;
+        }
+
+        .wps-info {
+            margin-top: 2rem;
+            padding-top: 1.25rem;
+            border-top: 1px solid #e2e8f0;
+            font-size: 0.825rem;
+            color: #64748b;
+        }
+
+        .wps-info strong {
+            color: #334155;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="logo-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8.288 15.038a5.25 5.25 0 017.424 0M5.106 11.856a9 9 0 0113.788 0M1.924 8.674a12.75 12.75 0 0120.152 0M12 18.75h.008v.008H12v-.008z" />
+            </svg>
+        </div>
+        <h2>Set up your device</h2>
+        <p class="subtitle">Ensure Bluetooth is turned on, then click below to pair and provision your device.</p>
+        
+        <!-- Official Improv Wi-Fi Web Component -->
+        <script type="module" src="https://unpkg.com/improv-wifi-sdk/dist/web/launch-button.js?module"></script>
+        
+        <improv-wifi-launch-button>
+            <button slot="activate" class="btn-custom">Connect Device to Wi-Fi</button>
+
+            <div slot="unsupported" class="fallback-notice">
+                <span class="notice-badge">iOS / Unsupported Browser</span>
+                <p>Web Bluetooth is not supported in this browser (e.g. Safari / iOS).</p>
+                <p><strong>To set up via SoftAP Captive Portal:</strong></p>
+                <ol>
+                    <li>Open Wi-Fi Settings on your mobile device.</li>
+                    <li>Connect to <strong>MyDevice_Setup</strong> network.</li>
+                    <li>Follow the pop-up portal or navigate to <code>http://192.168.4.1</code>.</li>
+                </ol>
+            </div>
+
+            <div slot="not-allowed" class="fallback-notice">
+                <span class="notice-badge">HTTPS Required</span>
+                <p>Web Bluetooth requires a secure context (HTTPS) or <code>http://localhost</code>.</p>
+            </div>
+        </improv-wifi-launch-button>
+
+        <div class="wps-info">
+            <strong>Alternative:</strong> Press the physical <strong>BOOT button</strong> on your device during setup to initiate a 120s WPS router search.
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,31 @@
+{
+    "name": "Geyser PlatformIO Environment",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "features": {
+        "ghcr.io/devcontainers/features/github-cli:1": {}
+    },
+    "runArgs": [
+        "--privileged"
+    ],
+    "mounts": [
+        "source=agy-config,target=/home/vscode/.gemini,type=volume",
+        "source=/dev/bus/usb,target=/dev/bus/usb,type=bind",
+        "source=/dev,target=/dev,type=bind"
+    ],
+    "postCreateCommand": "sudo chown -R vscode:vscode /home/vscode/.gemini && sudo usermod -a -G dialout vscode",
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "terminal.integrated.defaultProfile.linux": "bash"
+            },
+            "extensions": [
+                "ms-vscode.cpptools",
+                "platformio.platformio-ide",
+                "mhutchie.git-graph"
+            ]
+        }
+    },
+    "remoteUser": "vscode"
+}
