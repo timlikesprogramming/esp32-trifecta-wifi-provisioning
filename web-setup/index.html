@@ -253,7 +253,10 @@
                 </div>
 
                 <button type="submit" id="submitBtn" class="btn-primary" disabled>Connect Device</button>
-                <button type="button" class="btn-secondary" onclick="identifyDevice()">Identify Device (Blink LED)</button>
+                <div style="display: flex; gap: 10px; margin-top: 0.75rem;">
+                    <button type="button" class="btn-secondary" onclick="identifyDevice()" style="margin-top: 0;">Identify Device</button>
+                    <button type="button" class="btn-secondary" onclick="disconnectDevice()" style="margin-top: 0; color: #dc2626; border-color: #fca5a5;">Disconnect</button>
+                </div>
             </form>
         </div>
 
@@ -485,6 +488,17 @@
             // Send RPC Command 0x02 (Identify)
             const packet = new Uint8Array([0x02, 0x00, 0x02]);
             await writeRPC(rpcCmdChar, packet);
+        }
+
+        function disconnectDevice() {
+            if (gattDevice && gattDevice.gatt.connected) {
+                gattDevice.gatt.disconnect();
+            }
+            // Reset UI
+            document.getElementById("bleModal").style.display = "none";
+            document.getElementById("btContainer").style.display = "block";
+            document.getElementById("connectBtBtn").disabled = false;
+            document.getElementById("connectBtBtn").innerText = "Connect Device via Bluetooth";
         }
 
         async function submitCredentials(event) {
