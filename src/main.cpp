@@ -5,7 +5,9 @@
 #include <esp_wifi.h>
 #include <esp_wps.h>
 
+#ifndef IMPROV_WIFI_BLE_ENABLED
 #define IMPROV_WIFI_BLE_ENABLED
+#endif
 #include <ImprovWiFiBLE.h>
 
 // --- HARDWARE CONFIGURATION ---
@@ -75,32 +77,59 @@ void startWPSOverride()
     Serial.println("[WPS] Searching... Press the WPS button on your home router NOW.");
 }
 
-// --- CAPTIVE PORTAL HTML (Stored in Flash Memory) ---
-// EDGE CASE 1: Added explicit warning about 2.4GHz vs 5GHz networks
-const char index_html[] PROGMEM = R"rawliteral(
+// --- CAPTIVE PORTAL HTML TEMPLATES & ROUTING ---
+const char portal_header_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html>
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MyDevice Setup</title>
   <style>
-    body { font-family: -apple-system, system-ui, sans-serif; background: #f4f4f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-    .card { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); width: 90%; max-width: 400px; text-align: center; }
-    input[type=text], input[type=password] { width: 100%; padding: 12px; margin: 8px 0; display: inline-block; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
-    input[type=submit] { width: 100%; background-color: #2563eb; color: white; padding: 14px 20px; margin: 16px 0; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f4f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 1rem; box-sizing: border-box; }
+    .card { background: white; padding: 2rem 1.5rem; border-radius: 16px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); width: 100%; max-width: 380px; text-align: center; }
+    h2 { margin-top: 0; color: #18181b; font-size: 1.35rem; }
+    .warning { color: #b45309; font-size: 0.825rem; background: #fef3c7; padding: 10px; border-radius: 8px; margin-bottom: 15px; text-align: left; line-height: 1.4; }
+    label { display: block; text-align: left; font-size: 0.85rem; color: #52525b; font-weight: 600; margin-top: 10px; margin-bottom: 4px; }
+    select, input[type=text], input[type=password] { width: 100%; padding: 12px; border: 1px solid #d4d4d8; border-radius: 8px; box-sizing: border-box; font-size: 0.95rem; background: #fafafa; }
+    select:focus, input:focus { outline: none; border-color: #2563eb; background: #fff; }
+    input[type=submit] { width: 100%; background-color: #2563eb; color: white; padding: 14px 20px; margin-top: 16px; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: bold; transition: background 0.2s; }
     input[type=submit]:hover { background-color: #1d4ed8; }
-    .warning { color: #d97706; font-size: 0.85rem; background: #fef3c7; padding: 10px; border-radius: 6px; margin-bottom: 15px;}
+    .manual-btn { margin-top: 10px; background: none; border: none; color: #2563eb; font-size: 0.825rem; cursor: pointer; text-decoration: underline; }
   </style>
 </head>
 <body>
   <div class="card">
     <h2>Connect Your Device</h2>
-    <div class="warning"><strong>Note:</strong> Ensure you are connecting to a 2.4GHz network. 5GHz is not supported.</div>
+    <div class="warning"><strong>Note:</strong> Select your 2.4GHz Wi-Fi network. 5GHz is not supported.</div>
     <form action="/connect" method="POST">
-      <input type="text" name="ssid" placeholder="Wi-Fi Network Name" required>
-      <input type="password" name="pass" placeholder="Password" required>
+)rawliteral";
+
+const char portal_footer_html[] PROGMEM = R"rawliteral(
+      <label for="pass">Password</label>
+      <input type="password" id="pass" name="pass" placeholder="Enter Wi-Fi Password" required>
       <input type="submit" value="Connect Device">
     </form>
   </div>
+  <script>
+    function toggleManual() {
+      var sel = document.getElementById('ssidSelect');
+      var inp = document.getElementById('ssidInput');
+      var btn = document.getElementById('manualBtn');
+      if (inp.style.display === 'none') {
+        inp.style.display = 'block';
+        inp.disabled = false;
+        sel.style.display = 'none';
+        sel.disabled = true;
+        btn.innerText = 'Select from scanned networks';
+      } else {
+        inp.style.display = 'none';
+        inp.disabled = true;
+        sel.style.display = 'block';
+        sel.disabled = false;
+        btn.innerText = 'Enter hidden SSID manually';
+      }
+    }
+  </script>
 </body>
 </html>
 )rawliteral";
@@ -128,7 +157,63 @@ const char success_html[] PROGMEM = R"rawliteral(
 // --- WEB SERVER ROUTES ---
 void handlePortalRoot()
 {
-    webServer.send_P(200, "text/html", index_html);
+    Serial.println("\n[Captive Portal] Client requested portal. Scanning Wi-Fi networks...");
+    int n = WiFi.scanNetworks(false, true);
+
+    String formFields = "";
+
+    if (n > 0)
+    {
+        std::vector<String> seenSSIDs;
+        String options = "";
+
+        for (int i = 0; i < n; ++i)
+        {
+            String ssid = WiFi.SSID(i);
+            if (ssid.length() == 0) continue;
+
+            bool duplicate = false;
+            for (const auto &s : seenSSIDs)
+            {
+                if (s == ssid)
+                {
+                    duplicate = true;
+                    break;
+                }
+            }
+
+            if (!duplicate)
+            {
+                seenSSIDs.push_back(ssid);
+                int32_t rssi = WiFi.RSSI(i);
+                String signal = (rssi >= -60) ? "Strong" : (rssi >= -75) ? "Good" : "Weak";
+                options += "<option value=\"" + ssid + "\">" + ssid + " (" + String(rssi) + " dBm - " + signal + ")</option>\n";
+            }
+        }
+
+        if (seenSSIDs.size() > 0)
+        {
+            formFields += "<label for=\"ssidSelect\">Wi-Fi Network</label>\n";
+            formFields += "<select id=\"ssidSelect\" name=\"ssid\">\n" + options + "</select>\n";
+            formFields += "<input type=\"text\" id=\"ssidInput\" name=\"ssid\" placeholder=\"Enter Wi-Fi Network Name\" style=\"display:none;\" disabled required>\n";
+            formFields += "<button type=\"button\" id=\"manualBtn\" class=\"manual-btn\" onclick=\"toggleManual()\">Enter hidden SSID manually</button>\n";
+        }
+        else
+        {
+            formFields += "<label for=\"ssidInput\">Wi-Fi Network</label>\n";
+            formFields += "<input type=\"text\" id=\"ssidInput\" name=\"ssid\" placeholder=\"Enter Wi-Fi Network Name\" required>\n";
+        }
+    }
+    else
+    {
+        formFields += "<label for=\"ssidInput\">Wi-Fi Network</label>\n";
+        formFields += "<input type=\"text\" id=\"ssidInput\" name=\"ssid\" placeholder=\"Enter Wi-Fi Network Name\" required>\n";
+    }
+
+    WiFi.scanDelete();
+
+    String fullHTML = String(portal_header_html) + formFields + String(portal_footer_html);
+    webServer.send(200, "text/html", fullHTML);
 }
 
 void handlePortalConnect()
