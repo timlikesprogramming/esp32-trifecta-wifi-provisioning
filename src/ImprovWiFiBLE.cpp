@@ -354,10 +354,7 @@ NimBLEAdvertisementData ImprovWiFiBLE::buildAdvData(uint8_t state,
   ad.setServiceData(NimBLEUUID((uint16_t)SERVICE_DATA_UUID_16), payload,
                     sizeof(payload));
 
-  if (!device_name_.isEmpty()) {
-    ad.setShortName(device_name_.c_str());
-  }
-
+  // Device name is transmitted in Scan Response data to stay under the 31-byte limit
   return ad;
 }
 
