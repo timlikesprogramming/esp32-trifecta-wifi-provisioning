@@ -301,6 +301,15 @@ void ImprovWiFiBLE::rpcSendWifi(const uint8_t *p, size_t n) {
 }
 
 void ImprovWiFiBLE::rpcIdentify() {
+  Serial.println("\n[Improv BLE] Identify request received from web browser! Blinking LED...");
+  // Blink status LED to visually identify the hardware unit
+  pinMode(0, OUTPUT);
+  for (int i = 0; i < 5; i++) {
+    digitalWrite(0, LOW);
+    delay(100);
+    digitalWrite(0, HIGH);
+    delay(100);
+  }
 }
 
 void ImprovWiFiBLE::sendDeviceUrl() {
