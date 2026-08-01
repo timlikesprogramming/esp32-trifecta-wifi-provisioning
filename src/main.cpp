@@ -237,6 +237,151 @@ void handlePortalConnect()
     WiFi.begin(ssid.c_str(), pass.c_str());
 }
 
+// --- CONNECTED DASHBOARD HTML ---
+const char dashboard_html[] PROGMEM = R"rawliteral(
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32-S3 Dashboard</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 1.5rem; display: flex; justify-content: center; min-height: 100vh; }
+    .dashboard { width: 100%; max-width: 580px; }
+    .header { display: flex; justify-content: space-between; align-items: center; background: #1e293b; padding: 1.25rem 1.5rem; border-radius: 16px; margin-bottom: 1.25rem; border: 1px solid #334155; }
+    .header h1 { margin: 0; font-size: 1.25rem; font-weight: 700; color: #fff; }
+    .badge { background: rgba(34, 197, 94, 0.15); color: #4ade80; padding: 0.35rem 0.75rem; border-radius: 20px; font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+    .dot { width: 8px; height: 8px; background: #22c55e; border-radius: 50%; display: inline-block; animation: pulse 2s infinite; }
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem; }
+    @media (max-width: 480px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: #1e293b; border: 1px solid #334155; padding: 1.25rem; border-radius: 16px; }
+    .card-title { font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; margin-bottom: 0.875rem; }
+    .metric { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem; font-size: 0.875rem; }
+    .metric:last-child { margin-bottom: 0; }
+    .metric-label { color: #94a3b8; }
+    .metric-value { font-weight: 600; color: #f8fafc; font-family: monospace; }
+    .controls { background: #1e293b; border: 1px solid #334155; padding: 1.25rem; border-radius: 16px; text-align: center; }
+    .btn { background: #2563eb; color: white; border: none; padding: 0.75rem 1.25rem; font-size: 0.9rem; font-weight: 600; border-radius: 10px; cursor: pointer; transition: all 0.2s; width: 100%; margin-bottom: 0.75rem; }
+    .btn:hover { background: #1d4ed8; }
+    .btn-danger { background: #dc2626; margin-bottom: 0; }
+    .btn-danger:hover { background: #b91c1c; }
+  </style>
+</head>
+<body>
+  <div class="dashboard">
+    <div class="header">
+      <div>
+        <h1>ESP32-S3 Dashboard</h1>
+        <div style="font-size:0.8rem; color:#94a3b8; margin-top:2px;">Trifecta Provisioner</div>
+      </div>
+      <div class="badge"><span class="dot"></span> ONLINE</div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="card-title">Network Status</div>
+        <div class="metric"><span class="metric-label">SSID</span><span class="metric-value" id="ssid">--</span></div>
+        <div class="metric"><span class="metric-label">IP Address</span><span class="metric-value" id="ip">--</span></div>
+        <div class="metric"><span class="metric-label">Signal</span><span class="metric-value" id="rssi">--</span></div>
+        <div class="metric"><span class="metric-label">MAC</span><span class="metric-value" id="mac">--</span></div>
+      </div>
+      <div class="card">
+        <div class="card-title">System Metrics</div>
+        <div class="metric"><span class="metric-label">Uptime</span><span class="metric-value" id="uptime">--</span></div>
+        <div class="metric"><span class="metric-label">Free RAM</span><span class="metric-value" id="heap">--</span></div>
+        <div class="metric"><span class="metric-label">CPU Speed</span><span class="metric-value" id="cpu">--</span></div>
+        <div class="metric"><span class="metric-label">Status</span><span class="metric-value" style="color:#4ade80;">Active</span></div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn" onclick="triggerPing()">Ping Device</button>
+      <button class="btn btn-danger" onclick="resetWiFi()">Reset Wi-Fi Credentials</button>
+    </div>
+  </div>
+
+  <script>
+    async function updateStatus() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        document.getElementById('ssid').innerText = data.ssid;
+        document.getElementById('ip').innerText = data.ip;
+        document.getElementById('rssi').innerText = data.rssi + ' dBm';
+        document.getElementById('mac').innerText = data.mac;
+        document.getElementById('uptime').innerText = data.uptime;
+        document.getElementById('heap').innerText = data.heap + ' KB';
+        document.getElementById('cpu').innerText = data.cpu + ' MHz';
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function triggerPing() {
+      alert('Device is online and responding at ' + document.getElementById('ip').innerText);
+    }
+
+    async function resetWiFi() {
+      if (confirm('Are you sure you want to erase saved Wi-Fi credentials?')) {
+        await fetch('/reset', { method: 'POST' });
+        alert('Credentials erased. Device is rebooting into setup mode...');
+        window.location.reload();
+      }
+    }
+
+    setInterval(updateStatus, 3000);
+    updateStatus();
+  </script>
+</body>
+</html>
+)rawliteral";
+
+void startConnectedDashboard()
+{
+    webServer.stop();
+    dnsServer.stop();
+    WiFi.softAPdisconnect(true);
+
+    webServer.on("/", HTTP_GET, []() {
+        webServer.send_P(200, "text/html", dashboard_html);
+    });
+
+    webServer.on("/api/status", HTTP_GET, []() {
+        unsigned long sec = millis() / 1000;
+        unsigned int hrs = sec / 3600;
+        unsigned int mins = (sec % 3600) / 60;
+        sec = sec % 60;
+
+        char uptimeStr[32];
+        snprintf(uptimeStr, sizeof(uptimeStr), "%02u:%02u:%02u", hrs, mins, (unsigned int)sec);
+
+        String json = "{";
+        json += "\"ssid\":\"" + WiFi.SSID() + "\",";
+        json += "\"ip\":\"" + WiFi.localIP().toString() + "\",";
+        json += "\"rssi\":" + String(WiFi.RSSI()) + ",";
+        json += "\"mac\":\"" + WiFi.macAddress() + "\",";
+        json += "\"uptime\":\"" + String(uptimeStr) + "\",";
+        json += "\"heap\":" + String(ESP.getFreeHeap() / 1024) + ",";
+        json += "\"cpu\":" + String(ESP.getCpuFreqMHz());
+        json += "}";
+
+        webServer.send(200, "application/json", json);
+    });
+
+    webServer.on("/reset", HTTP_POST, []() {
+        webServer.send(200, "text/plain", "Resetting...");
+        delay(500);
+        WiFi.disconnect(false, true);
+        ESP.restart();
+    });
+
+    webServer.begin();
+    Serial.print("\n[Dashboard] Web Dashboard active at http://");
+    Serial.println(WiFi.localIP());
+}
+
 // --- GLOBAL EVENT HANDLER ---
 void WiFiEvent(WiFiEvent_t event, arduino_event_info_t info)
 {
@@ -247,6 +392,7 @@ void WiFiEvent(WiFiEvent_t event, arduino_event_info_t info)
         Serial.println(WiFi.localIP());
         currentState = STATE_CONNECTED;
         reconnectInterval = 5000; // Reset exponential backoff on success
+        startConnectedDashboard();
         break;
 
     case ARDUINO_EVENT_WPS_ER_SUCCESS:
@@ -311,6 +457,7 @@ void setup()
     if (WiFi.status() == WL_CONNECTED)
     {
         currentState = STATE_CONNECTED;
+        startConnectedDashboard();
         return;
     }
 
@@ -346,9 +493,12 @@ void setup()
 void loop()
 {
     // --- STATE MACHINE HANDLING ---
-    if (currentState == STATE_DUAL_BROADCAST)
+    if (currentState == STATE_DUAL_BROADCAST || currentState == STATE_CONNECTED)
     {
-        dnsServer.processNextRequest();
+        if (currentState == STATE_DUAL_BROADCAST)
+        {
+            dnsServer.processNextRequest();
+        }
         webServer.handleClient();
     }
 
