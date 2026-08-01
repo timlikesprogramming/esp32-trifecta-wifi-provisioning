@@ -1,4 +1,5 @@
 #include "TrifectaProvisioner.h"
+#include <ESPmDNS.h>
 
 TrifectaProvisioner* TrifectaProvisioner::instance = nullptr;
 
@@ -24,6 +25,13 @@ void TrifectaProvisioner::handleWiFiEvent(WiFiEvent_t event, arduino_event_info_
             currentState = ProvisioningState::CONNECTED;
             reconnectInterval = 5000;
             webPortal.startDashboard();
+            
+            if (MDNS.begin(MDNS_NAME)) {
+                Serial.printf("[mDNS] Responder started. Dashboard available at http://%s.local\n", MDNS_NAME);
+                MDNS.addService("http", "tcp", 80);
+            } else {
+                Serial.println("[mDNS] Error setting up mDNS responder!");
+            }
             break;
 
         case ARDUINO_EVENT_WPS_ER_SUCCESS:

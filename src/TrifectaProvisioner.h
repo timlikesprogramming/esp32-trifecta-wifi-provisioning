@@ -40,6 +40,7 @@ private:
     
     // Config
     const char* AP_SSID = "MyDevice_Setup";
+    const char* MDNS_NAME = "mydevice";
     const byte DNS_PORT = 53;
     IPAddress apIP;
 
