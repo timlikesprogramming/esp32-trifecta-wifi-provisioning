@@ -5,11 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MyProduct Web Setup</title>
     <style>
-        :root {
-            --improv-primary-color: #2563eb;
-            --improv-on-primary-color: #ffffff;
-        }
-
         * {
             box-sizing: border-box;
         }
@@ -34,7 +29,7 @@
             border-radius: 20px; 
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35); 
             text-align: center; 
-            max-width: 440px;
+            max-width: 460px;
             width: 100%;
         }
 
@@ -65,17 +60,12 @@
 
         p.subtitle { 
             color: #64748b; 
-            margin: 0 0 2rem 0; 
+            margin: 0 0 1.5rem 0; 
             font-size: 0.95rem;
             line-height: 1.5;
         }
 
-        improv-wifi-launch-button {
-            display: block;
-            margin-top: 1rem;
-        }
-
-        .btn-custom {
+        .btn-primary {
             background-color: #2563eb;
             color: #ffffff;
             border: none;
@@ -89,11 +79,84 @@
             width: 100%;
         }
 
-        .btn-custom:hover {
+        .btn-primary:hover {
             background-color: #1d4ed8;
             transform: translateY(-1px);
             box-shadow: 0 6px 12px -2px rgba(37, 99, 235, 0.4);
         }
+
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #475569;
+            border: 1px solid #cbd5e1;
+            padding: 0.6rem 1rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 0.75rem;
+            width: 100%;
+        }
+
+        .btn-secondary:hover {
+            background: #e2e8f0;
+            color: #1e293b;
+        }
+
+        /* Modal Form Elements */
+        .form-group {
+            text-align: left;
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #475569;
+            margin-bottom: 0.4rem;
+        }
+
+        select, input[type="text"], input[type="password"] {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            background: #f8fafc;
+            color: #0f172a;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: #2563eb;
+            background: #ffffff;
+        }
+
+        .status-box {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            color: #166534;
+            padding: 1rem;
+            border-radius: 10px;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(37, 99, 235, 0.2);
+            border-radius: 50%;
+            border-top-color: #2563eb;
+            animation: spin 0.8s linear infinite;
+            vertical-align: middle;
+            margin-right: 6px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
 
         .fallback-notice {
             background: #fffbe6;
@@ -140,8 +203,15 @@
             color: #64748b;
         }
 
-        .wps-info strong {
-            color: #334155;
+        .toggle-manual {
+            background: none;
+            border: none;
+            color: #2563eb;
+            font-size: 0.825rem;
+            cursor: pointer;
+            text-decoration: underline;
+            padding: 0;
+            margin-top: 0.4rem;
         }
     </style>
 </head>
@@ -153,34 +223,318 @@
             </svg>
         </div>
         <h2>Set up your device</h2>
-        <p class="subtitle">Ensure Bluetooth is turned on, then click below to pair and provision your device.</p>
+        <p class="subtitle">Ensure Bluetooth is turned on, then click below to pair and scan for Wi-Fi networks.</p>
         
-        <!-- Official Improv Wi-Fi Web Component -->
-        <script type="module" src="https://unpkg.com/improv-wifi-sdk/dist/web/launch-button.js?module"></script>
-        
-        <improv-wifi-launch-button>
-            <button slot="activate" class="btn-custom">Connect Device to Wi-Fi</button>
+        <!-- Web Bluetooth Primary Action -->
+        <div id="btContainer">
+            <button id="connectBtBtn" class="btn-primary" onclick="startBLEProvisioning()">Connect Device via Bluetooth</button>
+        </div>
 
-            <div slot="unsupported" class="fallback-notice">
-                <span class="notice-badge">iOS / Unsupported Browser</span>
-                <p>Web Bluetooth is not supported in this browser (e.g. Safari / iOS).</p>
-                <p><strong>To set up via SoftAP Captive Portal:</strong></p>
-                <ol>
-                    <li>Open Wi-Fi Settings on your mobile device.</li>
-                    <li>Connect to <strong>MyDevice_Setup</strong> network.</li>
-                    <li>Follow the pop-up portal or navigate to <code>http://192.168.4.1</code>.</li>
-                </ol>
+        <!-- Provisioning Dialog / Form (Dynamically shown) -->
+        <div id="bleModal" style="display: none; margin-top: 1.25rem;">
+            <div id="scanStatus" style="font-size: 0.9rem; color: #475569; margin-bottom: 1rem;">
+                <span class="spinner"></span> Scanning nearby 2.4GHz Wi-Fi networks...
             </div>
 
-            <div slot="not-allowed" class="fallback-notice">
-                <span class="notice-badge">HTTPS Required</span>
-                <p>Web Bluetooth requires a secure context (HTTPS) or <code>http://localhost</code>.</p>
-            </div>
-        </improv-wifi-launch-button>
+            <form id="wifiForm" onsubmit="submitCredentials(event)">
+                <div class="form-group">
+                    <label for="ssidSelect">Select Wi-Fi Network</label>
+                    <select id="ssidSelect" required>
+                        <option value="" disabled selected>Scanning for networks...</option>
+                    </select>
+                    <input type="text" id="ssidInput" placeholder="Enter Wi-Fi SSID" style="display:none;">
+                    <button type="button" class="toggle-manual" onclick="requestWiFiScan()" style="margin-right: 12px;">🔄 Rescan Networks</button>
+                    <button type="button" class="toggle-manual" onclick="toggleManualSSID()">Enter hidden network manually</button>
+                </div>
+
+                <div class="form-group">
+                    <label for="wifiPassword">Wi-Fi Password</label>
+                    <input type="password" id="wifiPassword" placeholder="Enter Wi-Fi Password" required>
+                </div>
+
+                <button type="submit" id="submitBtn" class="btn-primary" disabled>Connect Device</button>
+                <button type="button" class="btn-secondary" onclick="identifyDevice()">Identify Device (Blink LED)</button>
+            </form>
+        </div>
+
+        <div id="statusMessage" style="display:none;"></div>
+
+
+        <!-- Unsupported Browser Fallback -->
+        <div id="unsupportedNotice" class="fallback-notice" style="display: none;">
+            <span class="notice-badge">iOS / Unsupported Browser</span>
+            <p>Web Bluetooth is not supported in this browser (e.g. Safari / iOS).</p>
+            <p><strong>To set up via SoftAP Captive Portal:</strong></p>
+            <ol>
+                <li>Open Wi-Fi Settings on your mobile device.</li>
+                <li>Connect to <strong>MyDevice_Setup</strong> network.</li>
+                <li>Follow the pop-up portal or navigate to <code>http://192.168.4.1</code>.</li>
+            </ol>
+        </div>
 
         <div class="wps-info">
             <strong>Alternative:</strong> Press the physical <strong>BOOT button</strong> on your device during setup to initiate a 120s WPS router search.
         </div>
     </div>
+
+    <script>
+        const SVC_UUID_128       = "00467768-6228-2272-4663-277478268000";
+        const SVC_UUID_16        = 0x4677;
+        const CHAR_STATE_UUID    = "00467768-6228-2272-4663-277478268001";
+        const CHAR_RPC_CMD_UUID  = "00467768-6228-2272-4663-277478268003";
+        const CHAR_RPC_RES_UUID  = "00467768-6228-2272-4663-277478268004";
+
+        let gattDevice = null;
+        let rpcCmdChar = null;
+        let rpcResChar = null;
+        let scannedSSIDs = [];
+
+        // Check Web Bluetooth support on load
+        if (!("bluetooth" in navigator) || !window.isSecureContext) {
+            document.getElementById("connectBtBtn").style.display = "none";
+            document.getElementById("unsupportedNotice").style.display = "block";
+        }
+
+        async function startBLEProvisioning() {
+            try {
+                document.getElementById("connectBtBtn").disabled = true;
+                document.getElementById("connectBtBtn").innerText = "Pairing Bluetooth...";
+
+                gattDevice = await navigator.bluetooth.requestDevice({
+                    filters: [
+                        { services: [SVC_UUID_16] },
+                        { services: [SVC_UUID_128] },
+                        { namePrefix: "MyProduct" },
+                        { namePrefix: "MyDevice" }
+                    ],
+                    optionalServices: [SVC_UUID_128, SVC_UUID_16]
+                });
+
+                const server = await gattDevice.gatt.connect();
+                let service;
+                try {
+                    service = await server.getPrimaryService(SVC_UUID_128);
+                } catch (e) {
+                    service = await server.getPrimaryService(SVC_UUID_16);
+                }
+
+                rpcCmdChar = await service.getCharacteristic(CHAR_RPC_CMD_UUID);
+                rpcResChar = await service.getCharacteristic(CHAR_RPC_RES_UUID);
+
+                await rpcResChar.startNotifications();
+                rpcResChar.addEventListener('characteristicvaluechanged', handleRPCNotification);
+
+                document.getElementById("btContainer").style.display = "none";
+                document.getElementById("bleModal").style.display = "block";
+
+                // Send COMMAND_SCAN (0x04) over BLE
+                requestWiFiScan();
+
+            } catch (err) {
+                console.error("BLE Connect Error:", err);
+                document.getElementById("connectBtBtn").disabled = false;
+                document.getElementById("connectBtBtn").innerText = "Connect Device via Bluetooth";
+            }
+        }
+
+        async function writeRPC(char, packet) {
+            console.log("[BLE Write RPC]", packet);
+            try {
+                if (char.properties.writeWithoutResponse && char.writeValueWithoutResponse) {
+                    await char.writeValueWithoutResponse(packet);
+                } else if (char.writeValueWithResponse) {
+                    await char.writeValueWithResponse(packet);
+                } else {
+                    await char.writeValue(packet);
+                }
+            } catch (err) {
+                console.error("[BLE Write Error]", err);
+            }
+        }
+
+        async function requestWiFiScan() {
+            scannedSSIDs = [];
+            document.getElementById("scanStatus").innerHTML = '<span class="spinner"></span> Scanning nearby 2.4GHz Wi-Fi networks...';
+            document.getElementById("ssidSelect").innerHTML = '<option value="" disabled selected>Scanning nearby networks...</option>';
+            document.getElementById("submitBtn").disabled = true;
+
+            // Packet format: [Cmd=0x04, Len=0x00, Checksum=0x04]
+            const scanPacket = new Uint8Array([0x04, 0x00, 0x04]);
+            await writeRPC(rpcCmdChar, scanPacket);
+        }
+
+        function handleRPCNotification(event) {
+            try {
+                const data = event.target.value; // DataView
+                const cmd = data.getUint8(0);
+                const dataLen = data.getUint8(1);
+                console.log(`[BLE Notification] Received Cmd: 0x${cmd.toString(16)}, DataLen: ${dataLen}, Total Bytes: ${data.byteLength}`);
+
+                if (cmd === 0x04) { // Scan Result Packet
+                    if (dataLen === 0) {
+                        console.log("[BLE Scan] Scan completion signal (0x04, 0x00) received!");
+                        document.getElementById("scanStatus").innerHTML = "✔ Wi-Fi scan complete. Select your network below:";
+                        populateDropdown();
+                        return;
+                    }
+
+                    // Copy bytes safely into a standalone Uint8Array
+                    const bytes = new Uint8Array(data.byteLength);
+                    for (let i = 0; i < data.byteLength; i++) {
+                        bytes[i] = data.getUint8(i);
+                    }
+                    console.log(`[BLE Data] ${Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
+
+                    const decoder = new TextDecoder("utf-8");
+                    let offset = 2; // skip Cmd (0x04) and PayloadLen
+
+                    if (offset < bytes.length) {
+                        const ssidLen = bytes[offset++];
+                        // Ensure we don't read out of bounds if packet was truncated
+                        if (offset + ssidLen > bytes.length) {
+                            throw new Error(`Packet truncated: expected SSID len ${ssidLen}, but only ${bytes.length - offset} bytes left`);
+                        }
+                        const ssid = decoder.decode(bytes.subarray(offset, offset + ssidLen));
+                        offset += ssidLen;
+
+                        if (offset >= bytes.length) {
+                            throw new Error("Packet truncated: missing RSSI byte");
+                        }
+                        // RSSI is sent as a signed 8-bit integer, so we read the raw byte and cast to Int8
+                        const rssiRaw = bytes[offset++];
+                        // Convert Uint8 to Int8
+                        const rssi = rssiRaw > 127 ? rssiRaw - 256 : rssiRaw;
+
+                        if (offset >= bytes.length) {
+                            throw new Error("Packet truncated: missing Auth byte");
+                        }
+                        const authRaw = bytes[offset++];
+                        const auth = authRaw === 0 ? "NO" : "YES";
+
+                        console.log(`[BLE Scan Result] SSID: "${ssid}", RSSI: ${rssi} dBm, Auth: ${auth}`);
+
+                        if (ssid && !scannedSSIDs.some(s => s.ssid === ssid)) {
+                            scannedSSIDs.push({ ssid, rssi, auth });
+                            // Update dropdown immediately as networks arrive
+                            populateDropdown();
+                        }
+                    }
+                } else if (cmd === 0x01) { // Send Wi-Fi Response (Device URL)
+                    const bytes = new Uint8Array(data.byteLength);
+                    for (let i = 0; i < data.byteLength; i++) {
+                        bytes[i] = data.getUint8(i);
+                    }
+
+                    const decoder = new TextDecoder("utf-8");
+                    const urlLen = bytes[2];
+                    const url = decoder.decode(bytes.subarray(3, 3 + urlLen));
+                    console.log(`[BLE Provisioned] Device connected! URL: ${url}`);
+
+                    showSuccessMessage(url);
+                }
+            } catch (err) {
+                console.error("[BLE Notification Error]", err);
+                document.getElementById("scanStatus").innerHTML = "❌ Error parsing scan result: " + err.message;
+            }
+        }
+
+        function populateDropdown() {
+            const select = document.getElementById("ssidSelect");
+            select.innerHTML = '<option value="" disabled selected>Select a Wi-Fi Network</option>';
+
+            if (scannedSSIDs.length === 0) {
+                const opt = document.createElement("option");
+                opt.value = "";
+                opt.textContent = "No networks found (click Rescan below)";
+                opt.disabled = true;
+                select.appendChild(opt);
+                return;
+            }
+
+            // Sort by RSSI descending
+            scannedSSIDs.sort((a, b) => b.rssi - a.rssi);
+
+            scannedSSIDs.forEach(net => {
+                const opt = document.createElement("option");
+                opt.value = net.ssid;
+                const signalStr = net.rssi >= -60 ? "Strong" : net.rssi >= -75 ? "Good" : "Weak";
+                opt.textContent = `${net.ssid} (${net.rssi} dBm - ${signalStr})`;
+                select.appendChild(opt);
+            });
+
+            document.getElementById("submitBtn").disabled = false;
+        }
+
+        function toggleManualSSID() {
+            const sel = document.getElementById("ssidSelect");
+            const inp = document.getElementById("ssidInput");
+            if (inp.style.display === "none") {
+                inp.style.display = "block";
+                inp.required = true;
+                sel.style.display = "none";
+                sel.required = false;
+            } else {
+                inp.style.display = "none";
+                inp.required = false;
+                sel.style.display = "block";
+                sel.required = true;
+            }
+        }
+
+        async function identifyDevice() {
+            // Send RPC Command 0x02 (Identify)
+            const packet = new Uint8Array([0x02, 0x00, 0x02]);
+            await writeRPC(rpcCmdChar, packet);
+        }
+
+        async function submitCredentials(event) {
+            event.preventDefault();
+
+            const sel = document.getElementById("ssidSelect");
+            const inp = document.getElementById("ssidInput");
+            const ssid = (inp.style.display !== "none") ? inp.value : sel.value;
+            const pass = document.getElementById("wifiPassword").value;
+
+            if (!ssid) return;
+
+            document.getElementById("submitBtn").disabled = true;
+            document.getElementById("submitBtn").innerText = "Connecting Device to Wi-Fi...";
+
+            const enc = new TextEncoder();
+            const ssidBytes = enc.encode(ssid);
+            const passBytes = enc.encode(pass);
+
+            const payloadLen = 1 + ssidBytes.length + 1 + passBytes.length;
+            const packet = new Uint8Array(3 + payloadLen);
+
+            packet[0] = 0x01; // Send Wi-Fi Command
+            packet[1] = payloadLen;
+            packet[2] = ssidBytes.length;
+            packet.set(ssidBytes, 3);
+            
+            const passOffset = 3 + ssidBytes.length;
+            packet[passOffset] = passBytes.length;
+            packet.set(passBytes, passOffset + 1);
+
+            // Compute LSB checksum
+            let sum = 0;
+            for (let i = 0; i < packet.length - 1; i++) sum += packet[i];
+            packet[packet.length - 1] = sum & 0xff;
+
+            await writeRPC(rpcCmdChar, packet);
+        }
+
+        function showSuccessMessage(url) {
+            document.getElementById("bleModal").style.display = "none";
+            const msgBox = document.getElementById("statusMessage");
+            msgBox.className = "status-box";
+            msgBox.style.display = "block";
+            msgBox.innerHTML = `
+                <h3 style="margin-top:0; color:#15803d;">🎉 Connected Successfully!</h3>
+                <p>Your ESP32 is now connected to your Wi-Fi network.</p>
+                ${url ? `<p><a href="${url}" target="_blank" style="font-weight:bold; color:#15803d;">Open Device Dashboard (${url})</a></p>` : ''}
+            `;
+        }
+    </script>
 </body>
 </html>
