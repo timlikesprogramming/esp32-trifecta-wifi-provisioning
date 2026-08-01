@@ -1,24 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MyProduct Web Setup</title>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <div class="card">
         <div class="logo-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M8.288 15.038a5.25 5.25 0 017.424 0M5.106 11.856a9 9 0 0113.788 0M1.924 8.674a12.75 12.75 0 0120.152 0M12 18.75h.008v.008H12v-.008z" />
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M8.288 15.038a5.25 5.25 0 017.424 0M5.106 11.856a9 9 0 0113.788 0M1.924 8.674a12.75 12.75 0 0120.152 0M12 18.75h.008v.008H12v-.008z" />
             </svg>
         </div>
         <h2>Set up your device</h2>
         <p class="subtitle">Ensure Bluetooth is turned on, then click below to pair and scan for Wi-Fi networks.</p>
-        
+
         <!-- Web Bluetooth Primary Action -->
         <div id="btContainer">
-            <button id="connectBtBtn" class="btn-primary" onclick="startBLEProvisioning()">Connect Device via Bluetooth</button>
+            <button id="connectBtBtn" class="btn-primary" onclick="startBLEProvisioning()">Connect Device via
+                Bluetooth</button>
         </div>
 
         <!-- Provisioning Dialog / Form (Dynamically shown) -->
@@ -34,8 +39,10 @@
                         <option value="" disabled selected>Scanning for networks...</option>
                     </select>
                     <input type="text" id="ssidInput" placeholder="Enter Wi-Fi SSID" style="display:none;">
-                    <button type="button" class="toggle-manual" onclick="requestWiFiScan()" style="margin-right: 12px;">🔄 Rescan Networks</button>
-                    <button type="button" class="toggle-manual" onclick="toggleManualSSID()">Enter hidden network manually</button>
+                    <button type="button" class="toggle-manual" onclick="requestWiFiScan()"
+                        style="margin-right: 12px;">🔄 Rescan Networks</button>
+                    <button type="button" class="toggle-manual" onclick="toggleManualSSID()">Enter hidden network
+                        manually</button>
                 </div>
 
                 <div class="form-group">
@@ -45,8 +52,10 @@
 
                 <button type="submit" id="submitBtn" class="btn-primary" disabled>Connect Device</button>
                 <div style="display: flex; gap: 10px; margin-top: 0.75rem;">
-                    <button type="button" class="btn-secondary" onclick="identifyDevice()" style="margin-top: 0;">Identify Device</button>
-                    <button type="button" class="btn-secondary" onclick="disconnectDevice()" style="margin-top: 0; color: #dc2626; border-color: #fca5a5;">Disconnect</button>
+                    <button type="button" class="btn-secondary" onclick="identifyDevice()"
+                        style="margin-top: 0;">Identify Device</button>
+                    <button type="button" class="btn-secondary" onclick="disconnectDevice()"
+                        style="margin-top: 0; color: #dc2626; border-color: #fca5a5;">Disconnect</button>
                 </div>
             </form>
         </div>
@@ -67,10 +76,12 @@
         </div>
 
         <div class="wps-info">
-            <strong>Alternative:</strong> Press the physical <strong>BOOT button</strong> on your device during setup to initiate a 120s WPS router search.
+            <strong>Alternative:</strong> Press the physical <strong>BOOT button</strong> on your device during setup to
+            initiate a 120s WPS router search.
         </div>
     </div>
 
     <script src="app.js"></script>
 </body>
+
 </html>
