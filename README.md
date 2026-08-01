@@ -21,7 +21,7 @@ Once connected, the ESP32 serves a dashboard interface and broadcasts its addres
 
 ## 🛠️ Testing the Web UI Locally
 
-The frontend interacts with your ESP32 over Web Bluetooth. Because Web Bluetooth requires a Secure Context, you must either serve it over HTTPS or test it from `localhost`.
+The frontend interacts with your ESP32 over Web Bluetooth. Because Web Bluetooth requires a Secure Context, you must either serve it over HTTPS (which is done [here](https://timlikesprogramming.github.io/esp32-trifecta-wifi-provisioning/) using GitHub Pages) or test it from `localhost`.
 
 To run the web interface locally for testing, use Python's built-in HTTP server:
 
