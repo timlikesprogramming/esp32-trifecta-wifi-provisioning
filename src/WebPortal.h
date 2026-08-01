@@ -27,4 +27,5 @@ private:
     
     void handlePortalRoot();
     void handlePortalConnect();
+    void handleStatusApi();
 };

@@ -2,7 +2,68 @@
 #include "HtmlTemplates.h"
 #include <WiFi.h>
 
-WebPortal::WebPortal() : webServer(80), isCaptivePortal(false) {}
+WebPortal::WebPortal() : webServer(80), isCaptivePortal(false) {
+    // Register unified routes once
+    webServer.on("/", HTTP_ANY, [this]() {
+        if (isCaptivePortal) {
+            if (webServer.method() == HTTP_GET) {
+                handlePortalRoot();
+            } else {
+                webServer.send(405, "text/plain", "Method Not Allowed");
+            }
+        } else {
+            webServer.send_P(200, "text/html", dashboard_html);
+        }
+    });
+
+    webServer.on("/connect", HTTP_POST, [this]() {
+        if (isCaptivePortal) {
+            handlePortalConnect();
+        } else {
+            webServer.send(404, "text/plain", "Not found");
+        }
+    });
+
+    webServer.on("/api/status", HTTP_GET, [this]() {
+        if (!isCaptivePortal) {
+            handleStatusApi();
+        } else {
+            webServer.send(404, "text/plain", "Not found");
+        }
+    });
+
+    webServer.on("/reset", HTTP_POST, [this]() {
+        if (!isCaptivePortal) {
+            webServer.send(200, "text/plain", "Resetting...");
+            if (resetCallback) resetCallback();
+        } else {
+            webServer.send(404, "text/plain", "Not found");
+        }
+    });
+
+    // Captive Portal OS triggers
+    auto redirectRoot = [this]() {
+        if (isCaptivePortal) {
+            handlePortalRoot();
+        } else {
+            webServer.send(404, "text/plain", "Not found");
+        }
+    };
+    webServer.on("/hotspot-detect.html", redirectRoot);
+    webServer.on("/generate_204", redirectRoot);
+    webServer.on("/connecttest.txt", redirectRoot);
+    webServer.on("/ncsi.txt", redirectRoot);
+
+    webServer.onNotFound([this]() {
+        if (isCaptivePortal) {
+            webServer.sendHeader("Location", String("http://192.168.4.1"), true);
+            webServer.send(302, "text/plain", "");
+        } else {
+            String message = "Not found: " + webServer.uri();
+            webServer.send(404, "text/plain", message);
+        }
+    });
+}
 
 void WebPortal::onCredentialsReceived(std::function<void(String ssid, String pass)> callback) {
     credsCallback = callback;
@@ -18,62 +79,12 @@ void WebPortal::startCaptivePortal(const char* apSsid, IPAddress apIp, byte dnsP
     
     WiFi.softAP(apSsid);
     dnsServer.start(dnsPort, "*", apIp);
-
-    webServer.on("/", HTTP_GET, std::bind(&WebPortal::handlePortalRoot, this));
-    webServer.on("/connect", HTTP_POST, std::bind(&WebPortal::handlePortalConnect, this));
-
-    webServer.on("/hotspot-detect.html", std::bind(&WebPortal::handlePortalRoot, this));
-    webServer.on("/generate_204", std::bind(&WebPortal::handlePortalRoot, this));
-    webServer.on("/connecttest.txt", std::bind(&WebPortal::handlePortalRoot, this));
-    webServer.on("/ncsi.txt", std::bind(&WebPortal::handlePortalRoot, this));
-
-    webServer.onNotFound([this, apIp]() {
-        webServer.sendHeader("Location", String("http://") + apIp.toString(), true);
-        webServer.send(302, "text/plain", "");
-    });
-    
     webServer.begin();
 }
 
 void WebPortal::startDashboard() {
     stop();
     isCaptivePortal = false;
-
-    webServer.on("/", HTTP_ANY, [this]() {
-        webServer.send_P(200, "text/html", dashboard_html);
-    });
-
-    webServer.onNotFound([this]() {
-        String message = "Not found: " + webServer.uri();
-        webServer.send(404, "text/plain", message);
-    });
-
-    webServer.on("/api/status", HTTP_GET, [this]() {
-        unsigned long sec = millis() / 1000;
-        unsigned int hrs = sec / 3600;
-        unsigned int mins = (sec % 3600) / 60;
-        sec = sec % 60;
-        char uptimeStr[32];
-        snprintf(uptimeStr, sizeof(uptimeStr), "%02u:%02u:%02u", hrs, mins, (unsigned int)sec);
-
-        String json = "{";
-        json += "\"ssid\":\"" + WiFi.SSID() + "\",";
-        json += "\"ip\":\"" + WiFi.localIP().toString() + "\",";
-        json += "\"rssi\":" + String(WiFi.RSSI()) + ",";
-        json += "\"mac\":\"" + WiFi.macAddress() + "\",";
-        json += "\"uptime\":\"" + String(uptimeStr) + "\",";
-        json += "\"heap\":" + String(ESP.getFreeHeap() / 1024) + ",";
-        json += "\"cpu\":" + String(ESP.getCpuFreqMHz());
-        json += "}";
-
-        webServer.send(200, "application/json", json);
-    });
-
-    webServer.on("/reset", HTTP_POST, [this]() {
-        webServer.send(200, "text/plain", "Resetting...");
-        if (resetCallback) resetCallback();
-    });
-
     webServer.begin();
 }
 
