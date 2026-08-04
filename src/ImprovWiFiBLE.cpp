@@ -312,32 +312,50 @@ void ImprovWiFiBLE::rpcSendWifi(const uint8_t *p, size_t n) {
   for (uint8_t i = 0; i < pass_len; i++)
     pass += (char)p[pos + 1 + i];
 
-  bool ok = false;
-  if (customConnectWiFiCallback_) {
-    ok = customConnectWiFiCallback_(ssid.c_str(), pass.c_str());
-  } else {
-    ok = tryConnectToWifi(ssid.c_str(), pass.c_str());
-  }
-
-  if (!ok) {
-    updateError(ERR_CONNECT);
-    if (onImprovErrorCallback_)
-      onImprovErrorCallback_(ImprovTypes::Error::ERROR_UNABLE_TO_CONNECT);
-    updateState(STATE_AUTHORIZED);
-    advertiseNow();
-    return;
-  }
-
-  if (onImprovConnectedCallback_) {
-    onImprovConnectedCallback_(ssid.c_str(), pass.c_str());
-  }
-
-  updateState(STATE_PROVISIONED);
+  // Update state immediately so the client knows we're trying to connect
+  updateState(STATE_PROVISIONING);
   advertiseNow();
 
-  sendDeviceUrl();
+  // Create arguments for the background task
+  String *args = new String[2];
+  args[0] = ssid;
+  args[1] = pass;
+  void **params = new void*[2];
+  params[0] = this;
+  params[1] = args;
 
-  delay(250);
+  xTaskCreate([](void *pvParameters) {
+    void **p = (void **)pvParameters;
+    ImprovWiFiBLE *self = (ImprovWiFiBLE *)p[0];
+    String *args = (String *)p[1];
+
+    bool ok = false;
+    if (self->customConnectWiFiCallback_) {
+      ok = self->customConnectWiFiCallback_(args[0].c_str(), args[1].c_str());
+    } else {
+      ok = self->tryConnectToWifi(args[0].c_str(), args[1].c_str());
+    }
+
+    if (!ok) {
+      self->updateError(ERR_CONNECT);
+      if (self->onImprovErrorCallback_)
+        self->onImprovErrorCallback_(ImprovTypes::Error::ERROR_UNABLE_TO_CONNECT);
+      self->updateState(STATE_AUTHORIZED);
+      self->advertiseNow();
+    } else {
+      if (self->onImprovConnectedCallback_) {
+        self->onImprovConnectedCallback_(args[0].c_str(), args[1].c_str());
+      }
+      self->updateState(STATE_PROVISIONED);
+      self->advertiseNow();
+      self->sendDeviceUrl();
+      delay(250);
+    }
+
+    delete[] args;
+    delete[] p;
+    vTaskDelete(NULL);
+  }, "wifi_prov", 8192, params, 1, NULL);
 }
 
 void ImprovWiFiBLE::rpcIdentify() {
