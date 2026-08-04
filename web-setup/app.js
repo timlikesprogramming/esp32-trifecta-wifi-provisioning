@@ -1,6 +1,7 @@
 const SVC_UUID_128       = "00467768-6228-2272-4663-277478268000";
 const SVC_UUID_16        = 0x4677;
 const CHAR_STATE_UUID    = "00467768-6228-2272-4663-277478268001";
+const CHAR_ERROR_UUID    = "00467768-6228-2272-4663-277478268002";
 const CHAR_RPC_CMD_UUID  = "00467768-6228-2272-4663-277478268003";
 const CHAR_RPC_RES_UUID  = "00467768-6228-2272-4663-277478268004";
 
@@ -17,7 +18,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     
     // Bind form submission
-    document.getElementById("bleForm").addEventListener("submit", submitCredentials);
+    const form = document.getElementById("wifiForm");
+    if (form) form.addEventListener("submit", submitCredentials);
 });
 
 async function startBLEProvisioning() {
@@ -45,9 +47,40 @@ async function startBLEProvisioning() {
 
         rpcCmdChar = await service.getCharacteristic(CHAR_RPC_CMD_UUID);
         rpcResChar = await service.getCharacteristic(CHAR_RPC_RES_UUID);
+        const stateChar = await service.getCharacteristic(CHAR_STATE_UUID);
+        const errorChar = await service.getCharacteristic(CHAR_ERROR_UUID);
 
         await rpcResChar.startNotifications();
         rpcResChar.addEventListener('characteristicvaluechanged', handleRPCNotification);
+
+        await stateChar.startNotifications();
+        stateChar.addEventListener('characteristicvaluechanged', (e) => {
+            const state = e.target.value.getUint8(0);
+            console.log(`[BLE State Changed] State: ${state}`);
+            if (state === 0x03) { // Provisioning
+                document.getElementById("submitBtn").innerText = "Connecting to Wi-Fi...";
+            }
+        });
+
+        await errorChar.startNotifications();
+        errorChar.addEventListener('characteristicvaluechanged', (e) => {
+            const err = e.target.value.getUint8(0);
+            console.log(`[BLE Error Changed] Error: ${err}`);
+            if (err !== 0x00) {
+                document.getElementById("submitBtn").disabled = false;
+                document.getElementById("submitBtn").innerText = "Connect Device";
+                alert(`Provisioning Error Code: ${err}`);
+            }
+        });
+
+        gattDevice.addEventListener('gattserverdisconnected', () => {
+            console.log("BLE Disconnected unexpectedly.");
+            document.getElementById("submitBtn").disabled = false;
+            document.getElementById("submitBtn").innerText = "Connect Device";
+            document.getElementById("bleModal").style.display = "none";
+            document.getElementById("btContainer").style.display = "block";
+            alert("Bluetooth connection lost! The device may have restarted or the signal dropped.");
+        });
 
         document.getElementById("btContainer").style.display = "none";
         document.getElementById("bleModal").style.display = "block";
@@ -131,26 +164,23 @@ function handleRPCNotification(event) {
         }
         else if (cmd === 0x01) {
             // Provisioning result payload format:
-            // [Cmd=0x01] [Len] [State] [URL_Len] [URL] [Checksum]
+            // [Cmd=0x01] [Len] [URL_Len] [URL] [Checksum]
             if (dataLen > 0) {
-                const provState = data.getUint8(2);
-                if (provState === 0x04) { // STATE_PROVISIONED
-                    const urlLen = data.getUint8(3);
-                    let url = "";
-                    for (let i = 0; i < urlLen; i++) {
-                        url += String.fromCharCode(data.getUint8(4 + i));
-                    }
-                    console.log(`[BLE Provision] Success! Device IP URL: ${url}`);
-                    
-                    document.getElementById("bleForm").style.display = "none";
-                    document.getElementById("statusMessage").style.display = "block";
-                    document.getElementById("statusMessage").innerHTML = `
-                        <h2 style="color: #22c55e;">Credentials Received!</h2>
-                        <p style="color: #94a3b8; font-size: 0.9rem;">The device has successfully connected to your network.</p>
-                        <p style="color: #94a3b8; font-size: 0.9rem;">You can now manage your device here:</p>
-                        <a href="${url}" target="_blank" style="display:inline-block; margin-top:10px; background:#22c55e; color:#0f172a; padding:10px 20px; border-radius:8px; text-decoration:none; font-weight:bold;">Open Device Dashboard</a>
-                    `;
+                const urlLen = data.getUint8(2);
+                let url = "";
+                for (let i = 0; i < urlLen; i++) {
+                    url += String.fromCharCode(data.getUint8(3 + i));
                 }
+                console.log(`[BLE Provision] Success! Device IP URL: ${url}`);
+                
+                document.getElementById("wifiForm").style.display = "none";
+                document.getElementById("statusMessage").style.display = "block";
+                document.getElementById("statusMessage").innerHTML = `
+                    <h2 style="color: #22c55e;">Credentials Received!</h2>
+                    <p style="color: #94a3b8; font-size: 0.9rem;">The device has successfully connected to your network.</p>
+                    <p style="color: #94a3b8; font-size: 0.9rem;">You can now manage your device here:</p>
+                    <a href="${url}" target="_blank" style="display:inline-block; margin-top:10px; background:#22c55e; color:#0f172a; padding:10px 20px; border-radius:8px; text-decoration:none; font-weight:bold;">Open Device Dashboard</a>
+                `;
             }
         }
     } catch (err) {
@@ -174,7 +204,7 @@ function populateDropdown() {
     document.getElementById("submitBtn").disabled = false;
 }
 
-function toggleManual() {
+function toggleManualSSID() {
     const sel = document.getElementById('ssidSelect');
     const inp = document.getElementById('ssidInput');
     if (inp.style.display === 'none') {
@@ -212,7 +242,7 @@ async function submitCredentials(event) {
 
     const isManual = document.getElementById('ssidInput').style.display !== 'none';
     const ssid = isManual ? document.getElementById('ssidInput').value : document.getElementById('ssidSelect').value;
-    const pass = document.getElementById('pass').value;
+    const pass = document.getElementById('wifiPassword').value;
 
     document.getElementById("submitBtn").disabled = true;
     document.getElementById("submitBtn").innerText = "Sending credentials...";
