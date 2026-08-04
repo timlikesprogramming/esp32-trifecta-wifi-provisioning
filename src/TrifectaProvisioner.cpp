@@ -99,6 +99,24 @@ void TrifectaProvisioner::begin() {
         ESP.restart();
     });
 
+    improvBLE.setCustomConnectWiFi([](const char* ssid, const char* pass) -> bool {
+        Serial.printf("\n[BLE Improv] Credentials received for SSID: %s\n", ssid);
+        if (instance) {
+            instance->webPortal.stop();
+            instance->currentState = ProvisioningState::CONNECTING_NEW_CREDS;
+            instance->connectStartTime = millis();
+        }
+        WiFi.mode(WIFI_STA);
+        WiFi.disconnect(true);
+        WiFi.begin(ssid, pass);
+        
+        for (int i = 0; i < 20; i++) {
+            if (WiFi.status() == WL_CONNECTED) return true;
+            delay(500);
+        }
+        return false;
+    });
+
     // Setup WiFi
     WiFi.onEvent(TrifectaProvisioner::WiFiEventStatic);
     Serial.println("\n--- ESP32-S3 Commercial Provisioning ---");
